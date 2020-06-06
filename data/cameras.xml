@@ -8465,6 +8465,11 @@
 		<Crop x="0" y="2" width="-10" height="-2"/>
 		<Sensor black="0" white="4095"/>
 	</Camera>
+	<Camera make="SIGMA" model="sd Quattro H">
+		<ID make="Sigma" model="sd Quattro H">sd Quattro H</ID>
+		<Crop x="12" y="20" width="-452" height="-332"/>
+		<Sensor black="207" white="16383"/>
+	</Camera>
 	<Camera make="SONY" model="DSC-RX0">
 		<ID make="Sony" model="DSC-RX0">Sony DSC-RX0</ID>
 		<CFA width="2" height="2">

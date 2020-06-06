@@ -23,6 +23,7 @@
 #include "decoders/MrwDecoder.h"          // for MrwDecoder
 #include "decoders/NakedDecoder.h"        // for NakedDecoder
 #include "decoders/RafDecoder.h"          // for RafDecoder
+#include "decoders/X3fDecoder.h"          // for X3fDecoder
 #include "decoders/RawDecoder.h"          // for RawDecoder
 #include "decoders/RawDecoderException.h" // for RawDecoderException, ThrowRDE
 #include "io/Buffer.h"                    // for Buffer
@@ -33,6 +34,8 @@
 #include "parsers/FiffParserException.h"  // for FiffParserException
 #include "parsers/TiffParser.h"           // for TiffParser
 #include "parsers/TiffParserException.h"  // for TiffParserException
+#include "parsers/X3fParser.h"            // for X3fParser
+#include "parsers/X3fParserException.h"   // for X3fParserException
 
 namespace rawspeed {
 
@@ -61,6 +64,14 @@ std::unique_ptr<RawDecoder> RawParser::getDecoder(const CameraMetaData* meta) {
       return p.getDecoder(meta);
     } catch (FiffParserException&) {
     }
+  }
+
+  if (X3fDecoder::isX3f(mInput)) {
+      try {
+          X3fParser p(mInput);
+          return p.getDecoder(meta);
+      } catch (X3fParserException&) {
+      }
   }
 
   // Ordinary TIFF images
