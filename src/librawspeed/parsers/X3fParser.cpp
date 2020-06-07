@@ -75,26 +75,6 @@ namespace rawspeed {
 #define X3F_VERSION_4_1 X3F_VERSION(4,1)
 
 
-
-typedef struct x3f_header_s {
-    /* 2.0 Fields */
-    uint32_t identifier;          /* Should be �FOVb� 0x62564f46 */
-    uint32_t version;             /* 0x00020001 means 2.1 */
-    uint8_t unique_identifier[SIZE_UNIQUE_IDENTIFIER];
-    uint32_t mark_bits;
-    uint32_t columns;             /* Columns and rows ... */
-    uint32_t rows;                /* ... before rotation */
-    uint32_t rotation;            /* 0, 90, 180, 270 */
-
-    char white_balance[SIZE_WHITE_BALANCE]; /* Introduced in 2.1 */
-    char color_mode[SIZE_COLOR_MODE]; /* Introduced in 2.3 */
-
-    /* Introduced in 2.1 and extended from 32 to 64 in 3.0 */
-    uint8_t extended_types[NUM_EXT_DATA]; /* x3f_extended_types_t */
-    float extended_data[NUM_EXT_DATA]; /* 32 bits, but do type differ? */
-} x3f_header_t;
-
-
 X3fParser::X3fParser(const Buffer* input) : RawParser(input) {
     // check file size
     size_t size = input->getSize();
