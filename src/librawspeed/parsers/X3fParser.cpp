@@ -33,11 +33,13 @@
 #include "tiff/TiffTag.h"                // for FUJIOLDWB, FUJI_STRIPBYTECO...
 #include "X3fParserException.h"
 #include <cstdint>                       // for uint32_t, uint16_t
+#include <string>                        // for string
 #include <limits>                        // for numeric_limits
 #include <memory>                        // for make_unique, unique_ptr
 #include <utility>                       // for move
 
 using std::numeric_limits;
+using std::string;
 
 namespace rawspeed {
 
@@ -98,25 +100,18 @@ std::unique_ptr<RawDecoder> X3fParser::getDecoder(const CameraMetaData* meta) {
     auto decoder = std::make_unique<X3fDecoder>(mInput);
 
     // extract X3F directories
-    parseData(decoder.get());
+    try {
+        parseData(decoder.get());
+    } catch (X3fParserException &e) {
+        ThrowXPE("Parser error while preparing data for decoder: %s", e.what());
+    }
 
-    // WARNING: do *NOT* fallback to ordinary TIFF parser here!
-    // All the X3F raws are '.X3F' (Sigma). Do use X3fDecoder directly.
-
-//    try {
-//        if (!X3fDecoder::isAppropriateDecoder(rootIFD.get(), mInput))
-//            ThrowFPE("Not a SIGMA X3F.");
-//
-//        return std::make_unique<X3fDecoder>(std::move(rootIFD), mInput);
-//    } catch (TiffParserException&) {
-//        ThrowFPE("No decoder found. Sorry.");
-//    }
     return decoder;
 }
 
 void X3fParser::parseData(X3fDecoder *decoder) {
     // Go to the beginning of the directory, location stored at the end of the file, uint32_t
-    bs.setPosition(bs.getRemainSize()-4);
+    bs.setPosition(bs.getSize()-4);
     // locate to the directory
     uint32_t dir_loc = bs.getU32();
     bs.setPosition(dir_loc);
@@ -128,18 +123,43 @@ void X3fParser::parseData(X3fDecoder *decoder) {
     for (auto i=0; i<dirSec.dirNum; ++i) {
         X3fDirectoryEntry dir(bs);
 
-        // store all the directories? why?
-        // I'm only interested in the
+        // save current position
+        uint32_t old_pos = bs.getPosition();
+
+        // seek to the directory
+        bs.setPosition(dir.offset);
+
+        switch (dir.type) {
+            case X3F_IMAG:
+            case X3F_IMA2: {
+                // image entry, add to decoder
+                decoder->images.emplace_back(bs);
+                break;
+            }
+            case X3F_PROP: {
+                // property entry, add to decoder
+                decoder->properties.addProperties(bs, dir.offset);
+                break;
+            }
+            case X3F_CAMF: {
+                decoder->camf = X3fCamf(bs);
+                break;
+            }
+            default: {
+                // do nothing
+            }
+        }
+
+        bs.setPosition(old_pos);
     }
 }
 
-X3fSection::X3fSection(uint32_t offset, ByteStream &bs) {
-    _offset = offset;
-    id = bs.getU32();
+X3fSection::X3fSection(ByteStream &bs) {
+    id      = bs.getU32();
     version = bs.getU32();
 }
 
-X3fHeader::X3fHeader(ByteStream &bs): X3fSection(0, bs) {
+X3fHeader::X3fHeader(ByteStream &bs): X3fSection(bs) {
     /**
      * Header Section
      * Version 2.1-2.2
@@ -196,7 +216,7 @@ X3fHeader::X3fHeader(ByteStream &bs): X3fSection(0, bs) {
     }
 }
 
-X3fDirectorySection::X3fDirectorySection(ByteStream &bs): X3fSection(0, bs) {
+X3fDirectorySection::X3fDirectorySection(ByteStream &bs): X3fSection(bs) {
     /**
      * Data Section
      * Directory Section
@@ -205,7 +225,7 @@ X3fDirectorySection::X3fDirectorySection(ByteStream &bs): X3fSection(0, bs) {
      * 4 bytes, section version, should be 2.0
      * 4 bytes, number of directory entries
      */
-    if (id != X3F_SECd) {
+    if ((id!=X3F_SECd) && (id!=X3F_SECc)) {
         ThrowXPE("Unknown X3F directory identifier");
     }
 
@@ -218,6 +238,15 @@ X3fDirectorySection::X3fDirectorySection(ByteStream &bs): X3fSection(0, bs) {
         ThrowXPE("X3F directory is empty");
     }
 }
+
+    static string getIdAsString(ByteStream &bytes) {
+        uint8_t id[5];
+        for (int i = 0; i < 4; i++)
+            id[i] = bytes.getByte();
+        id[4] = 0;
+        return string(reinterpret_cast<const char*>(id));
+    }
+
 
 X3fDirectoryEntry::X3fDirectoryEntry(ByteStream &bs) {
     /**
@@ -238,7 +267,7 @@ X3fDirectoryEntry::X3fDirectoryEntry(ByteStream &bs) {
     bs.setPosition(old_pos);
 }
 
-X3fImageData::X3fImageData(uint32_t offset, ByteStream &bs): X3fSection(offset, bs) {
+X3fImageData::X3fImageData(ByteStream &bs): X3fSection(bs) {
     type     = bs.getU32();
     format   = bs.getU32();
     width    = bs.getU32();
@@ -246,7 +275,7 @@ X3fImageData::X3fImageData(uint32_t offset, ByteStream &bs): X3fSection(offset, 
     dataSize = bs.getU32();
 }
 
-X3fPropertyList::X3fPropertyList(uint32_t offset, ByteStream &bs): X3fSection(offset, bs) {
+X3fPropertyList::X3fPropertyList(ByteStream &bs): X3fSection(bs) {
     num      = bs.getU32();
     format   = bs.getU32();
     reserved = bs.getU32();
@@ -254,8 +283,204 @@ X3fPropertyList::X3fPropertyList(uint32_t offset, ByteStream &bs): X3fSection(of
 }
 
 X3fPropertyEntry::X3fPropertyEntry(ByteStream &bs) {
-    nameOffset  = bs.getU32();
-    valueOffset = bs.getU32();
+    key_off = bs.getU32();
+    val_off = bs.getU32();
+}
+
+X3fCamf::X3fCamf(ByteStream &bs) {
+    type = bs.getU32();
+    tN.val0 = bs.getU32();
+    tN.val1 = bs.getU32();
+    tN.val2 = bs.getU32();
+    tN.val3 = bs.getU32();
+}
+
+/*
+* ConvertUTF16toUTF8 function only Copyright:
+*
+* Copyright 2001-2004 Unicode, Inc.
+*
+* Disclaimer
+*
+* This source code is provided as is by Unicode, Inc. No claims are
+* made as to fitness for any particular purpose. No warranties of any
+* kind are expressed or implied. The recipient agrees to determine
+* applicability of information provided. If this file has been
+* purchased on magnetic or optical media from Unicode, Inc., the
+* sole remedy for any claim will be exchange of defective media
+* within 90 days of receipt.
+*
+* Limitations on Rights to Redistribute This Code
+*
+* Unicode, Inc. hereby grants the right to freely use the information
+* supplied in this file in the creation of products supporting the
+* Unicode Standard, and to make copies of this file in any form
+* for internal or external distribution as long as this notice
+* remains attached.
+*/
+
+    using UTF32 = unsigned int;    /* at least 32 bits */
+    using UTF16 = unsigned short;  /* at least 16 bits */
+    using UTF8 = unsigned char;    /* typically 8 bits */
+    using Boolean = unsigned char; /* 0 or 1 */
+
+/* Some fundamental constants */
+#define UNI_REPLACEMENT_CHAR (UTF32)0x0000FFFD
+#define UNI_MAX_BMP (UTF32)0x0000FFFF
+#define UNI_MAX_UTF16 (UTF32)0x0010FFFF
+#define UNI_MAX_UTF32 (UTF32)0x7FFFFFFF
+#define UNI_MAX_LEGAL_UTF32 (UTF32)0x0010FFFF
+
+#define UNI_MAX_UTF8_BYTES_PER_CODE_POINT 4
+
+#define UNI_UTF16_BYTE_ORDER_MARK_NATIVE  0xFEFF
+#define UNI_UTF16_BYTE_ORDER_MARK_SWAPPED 0xFFFE
+
+#define UNI_SUR_HIGH_START  (UTF32)0xD800
+#define UNI_SUR_HIGH_END    (UTF32)0xDBFF
+#define UNI_SUR_LOW_START   (UTF32)0xDC00
+#define UNI_SUR_LOW_END     (UTF32)0xDFFF
+
+static const int halfShift  = 10; /* used for shifting by 10 bits */
+static const UTF32 halfBase = 0x0010000UL;
+static const UTF8 firstByteMark[7] = { 0x00, 0x00, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC };
+
+static bool ConvertUTF16toUTF8(const UTF16** sourceStart,
+                               const UTF16* sourceEnd, UTF8** targetStart,
+                               const UTF8* targetEnd) {
+    bool success = true;
+    const UTF16* source = *sourceStart;
+    UTF8* target = *targetStart;
+    while (source < sourceEnd) {
+        UTF32 ch;
+        unsigned short bytesToWrite = 0;
+        const UTF32 byteMask = 0xBF;
+        const UTF32 byteMark = 0x80;
+        const UTF16* oldSource = source; /* In case we have to back up because of target overflow. */
+        ch = *source;
+        source++;
+        /* If we have a surrogate pair, convert to UTF32 first. */
+        if (ch >= UNI_SUR_HIGH_START && ch <= UNI_SUR_HIGH_END) {
+            /* If the 16 bits following the high surrogate are in the source buffer... */
+            if (source < sourceEnd) {
+                UTF32 ch2 = *source;
+                /* If it's a low surrogate, convert to UTF32. */
+                if (ch2 >= UNI_SUR_LOW_START && ch2 <= UNI_SUR_LOW_END) {
+                    ch = ((ch - UNI_SUR_HIGH_START) << halfShift)
+                         + (ch2 - UNI_SUR_LOW_START) + halfBase;
+                    ++source;
+#if 0
+                    } else if (flags == strictConversion) { /* it's an unpaired high surrogate */
+      --source; /* return to the illegal value itself */
+      success = false;
+      break;
+#endif
+                }
+            } else { /* We don't have the 16 bits following the high surrogate. */
+                --source; /* return to the high surrogate */
+                success = false;
+                break;
+            }
+        }
+        /* Figure out how many bytes the result will require */
+        if (ch < static_cast<UTF32>(0x80)) {
+            bytesToWrite = 1;
+        } else if (ch < static_cast<UTF32>(0x800)) {
+            bytesToWrite = 2;
+        } else if (ch < static_cast<UTF32>(0x10000)) {
+            bytesToWrite = 3;
+        } else if (ch < static_cast<UTF32>(0x110000)) {
+            bytesToWrite = 4;
+        } else {                            bytesToWrite = 3;
+            ch = UNI_REPLACEMENT_CHAR;
+        }
+
+        target += bytesToWrite;
+        if (target > targetEnd) {
+            source  = oldSource; /* Back up source pointer! */
+            target -= bytesToWrite;
+            success = false;
+            break;
+        }
+        assert(bytesToWrite > 0);
+        for (int i = bytesToWrite; i > 1; i--) {
+            target--;
+            *target = static_cast<UTF8>((ch | byteMark) & byteMask);
+            ch >>= 6;
+        }
+        target--;
+        *target = static_cast<UTF8>(ch | firstByteMark[bytesToWrite]);
+        target += bytesToWrite;
+    }
+    // Function modified to retain source + target positions
+    //  *sourceStart = source;
+    //  *targetStart = target;
+    return success;
+}
+
+string X3fPropertyCollection::getString(ByteStream &bs) {
+    uint32_t max_len = bs.getRemainSize() / 2;
+    const auto* start =
+            reinterpret_cast<const UTF16*>(bs.getData(max_len * 2));
+    const UTF16* src_end = start;
+    uint32_t i = 0;
+    for (; i < max_len && start == src_end; i++) {
+        if (start[i] == 0) {
+            src_end = &start[i];
+        }
+    }
+    if (start != src_end) {
+        auto *dest = new UTF8[i * 4UL + 1];
+        memset(dest, 0, i * 4UL + 1);
+        if (ConvertUTF16toUTF8(&start, src_end, &dest, &dest[i * 4 - 1])) {
+            string ret(reinterpret_cast<const char*>(dest));
+            delete[] dest;
+            return ret;
+        }
+        delete[] dest;
+    }
+    return "";
+}
+
+void X3fPropertyCollection::addProperties(ByteStream &bs, uint32_t offset) {
+    bs.setPosition(offset);
+
+    X3fPropertyList pl(bs);
+
+    if (pl.id != X3F_SECp)
+        ThrowXPE("Unknown Property signature");
+
+    if (pl.version < X3F_VERSION_2_0)
+        ThrowXPE("File version too old (properties)");
+
+    if (pl.num < 1)
+        return;
+
+    if (pl.format != 0)
+        ThrowXPE("Unknown property character encoding");
+
+    if (pl.num > 1000)
+        ThrowXPE("Unreasonable number of properties: %u", pl.num);
+
+    uint32_t data_start = bs.getPosition() + pl.num*8;
+
+    for (uint32_t i = 0; i < pl.num; i++) {
+        X3fPropertyEntry pe(bs);
+
+        uint32_t old_pos = bs.getPosition();
+
+        if (    bs.isValid(pe.key_off * 2 + data_start, 2)
+            &&  bs.isValid(pe.val_off * 2 + data_start, 2)) {
+
+            bs.setPosition(pe.key_off * 2 + data_start);
+            string key = getString(bs);
+            bs.setPosition(pe.val_off * 2 + data_start);
+            string val = getString(bs);
+            props[key] = val;
+        }
+
+        bs.setPosition(old_pos);
+    }
 }
 
 } // namespace rawspeed

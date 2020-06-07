@@ -21,6 +21,7 @@
 #pragma once
 
 #include "common/RawImage.h"              // for RawImage
+#include "common/RawImage.h"              // for RawImage
 #include "decoders/AbstractTiffDecoder.h" // for AbstractTiffDecoder
 #include "io/ByteStream.h"                // for ByteStream
 #include "tiff/TiffIFD.h"                 // for TiffIFD (ptr only), TiffRo...
@@ -35,10 +36,9 @@ class Buffer;
 
 class X3fSection {
 public:
-    explicit X3fSection(uint32_t offset, ByteStream &bytes);
+    explicit X3fSection(ByteStream &bytes);
     uint32_t id;        // section identifier
     uint32_t version;   // section version
-    uint32_t _offset;   // offset from the start of the file, this is not a property field
 };
 
 // X3F header macros
@@ -90,7 +90,7 @@ public:
 
 class X3fImageData : public X3fSection {
 public:
-    explicit X3fImageData(uint32_t offset, ByteStream &bytes);
+    explicit X3fImageData(ByteStream &bytes);
     // uint32_t id;        // section identifier, should be "SECi"
     // uint32_t version;   // image format version
     uint32_t type;      // 2 = processed for preview
@@ -106,7 +106,7 @@ public:
 
 class X3fPropertyList : public X3fSection {
 public:
-    explicit X3fPropertyList(uint32_t offset, ByteStream &bytes);
+    explicit X3fPropertyList(ByteStream &bytes);
     // uint32_t id;        // section identifier, should be "SECp"
     // uint32_t version;   // property format version
     uint32_t num;       // number of property entries
@@ -118,8 +118,58 @@ public:
 class X3fPropertyEntry {
 public:
     explicit X3fPropertyEntry(ByteStream &bytes);
-    uint32_t nameOffset;   // Offset in characters of property name from start of character data. Not necessarily immediately following the previous property's value.
-    uint32_t valueOffset;  // Offset in characters of property value from start of character data.
+    uint32_t key_off;   // Offset in characters of property name from start of character data. Not necessarily immediately following the previous property's value.
+    uint32_t val_off;   // Offset in characters of property value from start of character data.
+};
+
+class X3fPropertyCollection {
+public:
+    void addProperties(ByteStream &bytes, uint32_t offset);
+    std::string getString(ByteStream &bytes);
+    std::map<std::string, std::string> props;
+};
+
+
+typedef struct x3f_camf_typeN_s {
+    uint32_t val0;
+    uint32_t val1;
+    uint32_t val2;
+    uint32_t val3;
+} x3f_camf_typeN_t;
+
+typedef struct x3f_camf_type2_s {
+    uint32_t reserved;
+    uint32_t infotype;
+    uint32_t infotype_version;
+    uint32_t crypt_key;
+} x3f_camf_type2_t;
+
+typedef struct x3f_camf_type4_s {
+    uint32_t decoded_data_size;
+    uint32_t decode_bias;
+    uint32_t block_size;
+    uint32_t block_count;
+} x3f_camf_type4_t;
+
+typedef struct x3f_camf_type5_s {
+    uint32_t decoded_data_size;
+    uint32_t decode_bias;
+    uint32_t unknown2;
+    uint32_t unknown3;
+} x3f_camf_type5_t;
+
+class X3fCamf {
+public:
+    X3fCamf() = default;
+    explicit X3fCamf(ByteStream &bs);
+    uint32_t type;
+    union {
+        x3f_camf_typeN_t tN;
+        x3f_camf_type2_t t2;
+        x3f_camf_type4_t t4;
+        x3f_camf_type5_t t5;
+    };
+
 };
 
 class X3fDecoder final : public RawDecoder
@@ -132,10 +182,12 @@ public:
     void checkSupportInternal(const CameraMetaData* meta) override;
     void decodeMetaDataInternal(const CameraMetaData* meta) override;
 
+    std::vector<X3fImageData> images;
+    X3fPropertyCollection properties;
+    X3fCamf camf;
+
 protected:
     int getDecoderVersion() const override { return 0; }
-
-
 };
 
 } // namespace rawspeed
