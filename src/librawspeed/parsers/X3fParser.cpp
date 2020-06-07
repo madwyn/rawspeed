@@ -74,12 +74,7 @@ namespace rawspeed {
 #define X3F_VERSION_4_0 X3F_VERSION(4,0)
 #define X3F_VERSION_4_1 X3F_VERSION(4,1)
 
-#define SIZE_UNIQUE_IDENTIFIER 16
-#define SIZE_WHITE_BALANCE 32
-#define SIZE_COLOR_MODE 32
-#define NUM_EXT_DATA_2_1 32
-#define NUM_EXT_DATA_3_0 64
-#define NUM_EXT_DATA NUM_EXT_DATA_3_0
+
 
 typedef struct x3f_header_s {
     /* 2.0 Fields */
@@ -103,85 +98,19 @@ typedef struct x3f_header_s {
 X3fParser::X3fParser(const Buffer* input) : RawParser(input) {
     // check file size
     size_t size = input->getSize();
-    if (size < 104 + 128)
+    if (size < 104 + 128) {
         ThrowXPE("X3F file too small");
+    }
 
     // init the byte stream
     bs = ByteStream(DataBuffer(*mInput, Endianness::little));
 
     // parse the X3F file header
     try {
-        parseHeader();
-        bs.setPosition(0);
+        // parse header
+        X3fHeader header(bs);
     } catch (IOException& e) {
         ThrowXPE("IO Error while reading header: %s", e.what());
-    }
-}
-
-void X3fParser::parseHeader() {
-    /**
-     * Header Section
-     * Version 2.1-2.2
-     * 4   bytes, file type identifier, contains "FOVb", used to verify that this is an FOVb file.
-     * 4   bytes, file format version, version of the file.
-     * 16  bytes, unique identifier, guaranteed unique to each image. Formed from camera serial number / OUI, timestamp, and high-speed timer register. Can be used to identify images even if they are renamed. No, it's not UUID-compatible.
-     * 4   bytes, mark bits, can be used to denote that images are marked into one or more subsets. File interface functions allow setting these bits and searching for files based on these bits. This feature will not be usable on write- once media.
-     * 4   bytes, image columns, width of unrotated image in columns. This is the size output the user expects from this image, not the size of the raw image data. Not necessarily equal to the width of any image entry in the file; this supports images where the raw data has rectangular pixels.
-     * 4   bytes, image rows, height of unrotated image in rows. This is the size output the user expects from this image, not the size of the raw image data. Not necessarily equal to the width of any image entry in the file; this supports images where the raw data has rectangular pixels.
-     * 4   bytes, rotation, image rotation in degrees clockwise from normal camera orientation. Valid values are 0, 90, 180, 270.
-     * 32  bytes, white balance label string, contains an ASCIIZ string label of the current white balance setting for this image.
-     * 32  bytes, extended data types, contains 32 8-bit values indicating the types of the following extended data.
-     * 128 bytes, extended data, contains 32 32-bit values of extended data.
-     */
-
-    // x3f file header structure
-    x3f_header_s H;
-
-    // the FOVb identifier
-    H.identifier = bs.getU32();
-
-    if (H.identifier != X3F_FOVb) {
-        ThrowXPE("Not an X3f file (Signature)");
-    }
-
-    // get the X3F file version
-    H.version = bs.getU32();
-
-    // get the unique identifier
-    for (auto i=0; i<=SIZE_UNIQUE_IDENTIFIER-1; ++i) {
-        H.unique_identifier[i] = bs.getByte();
-    }
-
-    // the meaning of the rest of the header for version >= 4.0 (Quattro) is unknown
-    // 20 bytes for mark and other bits
-    // bytes.skipBytes(16 + 4);
-    if (H.version < X3F_VERSION_4_0) {
-        H.mark_bits = bs.getU32();
-        H.columns   = bs.getU32();
-        H.rows      = bs.getU32();
-        H.rotation  = bs.getU32();
-
-        if (H.version >= X3F_VERSION_2_1) {
-            int num_ext_data = H.version >= X3F_VERSION_3_0 ? NUM_EXT_DATA_3_0 : NUM_EXT_DATA_2_1;
-
-            for (auto i=0; i<=SIZE_WHITE_BALANCE-1; ++i) {
-                H.white_balance[i] = bs.getByte();
-            }
-
-            if (H.version >= X3F_VERSION_2_3) {
-                for (auto i=0; i<=SIZE_WHITE_BALANCE-1; ++i) {
-                    H.color_mode[i] = bs.getByte();
-                }
-            }
-
-            for (auto i=0; i<=num_ext_data; ++i) {
-                H.extended_types[i] = bs.getByte();
-            }
-
-            for (auto i=0; i<num_ext_data; i++) {
-                H.extended_data[i] = bs.getFloat();
-            }
-        }
     }
 }
 
@@ -202,7 +131,7 @@ std::unique_ptr<RawDecoder> X3fParser::getDecoder(const CameraMetaData* meta) {
 //    } catch (TiffParserException&) {
 //        ThrowFPE("No decoder found. Sorry.");
 //    }
-    return nullptr;
+    return decoder;
 }
 
 void X3fParser::parseData(X3fDecoder *decoder) {
@@ -212,6 +141,82 @@ void X3fParser::parseData(X3fDecoder *decoder) {
     uint32_t dir_loc = bs.getU32();
     bs.setPosition(dir_loc);
 
+    // extract directory section
+    X3fDirectorySection dirSec(bs);
+
+    // visit all entries
+    for (auto i=0; i<dirSec.dirNum; ++i) {
+        X3fDirectoryEntry dir(bs);
+
+        // store all the directories? why?
+        // I'm only interested in the
+    }
+}
+
+X3fSection::X3fSection(uint32_t offset, ByteStream &bs) {
+    _offset = offset;
+    id = bs.getU32();
+    version = bs.getU32();
+}
+
+X3fHeader::X3fHeader(ByteStream &bs): X3fSection(0, bs) {
+    /**
+     * Header Section
+     * Version 2.1-2.2
+     * 4   bytes, file type identifier, contains "FOVb", used to verify that this is an FOVb file.
+     * 4   bytes, file format version, version of the file.
+     * 16  bytes, unique identifier, guaranteed unique to each image. Formed from camera serial number / OUI, timestamp, and high-speed timer register. Can be used to identify images even if they are renamed. No, it's not UUID-compatible.
+     * 4   bytes, mark bits, can be used to denote that images are marked into one or more subsets. File interface functions allow setting these bits and searching for files based on these bits. This feature will not be usable on write- once media.
+     * 4   bytes, image columns, width of unrotated image in columns. This is the size output the user expects from this image, not the size of the raw image data. Not necessarily equal to the width of any image entry in the file; this supports images where the raw data has rectangular pixels.
+     * 4   bytes, image rows, height of unrotated image in rows. This is the size output the user expects from this image, not the size of the raw image data. Not necessarily equal to the width of any image entry in the file; this supports images where the raw data has rectangular pixels.
+     * 4   bytes, rotation, image rotation in degrees clockwise from normal camera orientation. Valid values are 0, 90, 180, 270.
+     * 32  bytes, white balance label string, contains an ASCIIZ string label of the current white balance setting for this image.
+     * 32  bytes, extended data types, contains 32 8-bit values indicating the types of the following extended data.
+     * 128 bytes, extended data, contains 32 32-bit values of extended data.
+     */
+    if (id != X3F_FOVb) {
+        ThrowXPE("Not an X3f file (Signature)");
+    }
+
+    // get the unique identifier
+    for (auto i=0; i<=SIZE_UNIQUE_IDENTIFIER-1; ++i) {
+        unique_identifier[i] = bs.getByte();
+    }
+
+    // the meaning of the rest of the header for version >= 4.0 (Quattro) is unknown
+    // 20 bytes for mark and other bits
+    // bytes.skipBytes(16 + 4);
+    if (version < X3F_VERSION_4_0) {
+        mark_bits = bs.getU32();
+        columns   = bs.getU32();
+        rows      = bs.getU32();
+        rotation  = bs.getU32();
+
+        if (version >= X3F_VERSION_2_1) {
+            int num_ext_data = version >= X3F_VERSION_3_0 ? NUM_EXT_DATA_3_0 : NUM_EXT_DATA_2_1;
+
+            for (auto i=0; i<=SIZE_WHITE_BALANCE-1; ++i) {
+                white_balance[i] = bs.getByte();
+            }
+
+            if (version >= X3F_VERSION_2_3) {
+                for (auto i=0; i<=SIZE_WHITE_BALANCE-1; ++i) {
+                    color_mode[i] = bs.getByte();
+                }
+            }
+
+            for (auto i=0; i<=num_ext_data; ++i) {
+                extended_types[i] = bs.getByte();
+            }
+
+            for (auto i=0; i<num_ext_data; i++) {
+                extended_data[i] = bs.getFloat();
+            }
+        }
+    }
+}
+
+X3fDirectorySection::X3fDirectorySection(ByteStream &bs): X3fSection(0, bs) {
     /**
      * Data Section
      * Directory Section
@@ -220,32 +225,57 @@ void X3fParser::parseData(X3fDecoder *decoder) {
      * 4 bytes, section version, should be 2.0
      * 4 bytes, number of directory entries
      */
-
-    uint32_t sec_identifier = bs.getU32();
-    if (sec_identifier != X3F_SECd) {
+    if (id != X3F_SECd) {
         ThrowXPE("Unknown X3F directory identifier");
     }
 
-    uint32_t sec_version = bs.getU32();
-    if (sec_version < X3F_VERSION_2_0) {
+    if (version < X3F_VERSION_2_0) {
         ThrowXPE("X3F version older than 2.0 is not supported");
     }
 
-    uint32_t sec_num_dir_entries = bs.getU32();
-    if (sec_num_dir_entries < 1) {
+    dirNum = bs.getU32();
+    if (dirNum < 1) {
         ThrowXPE("X3F directory is empty");
     }
+}
 
+X3fDirectoryEntry::X3fDirectoryEntry(ByteStream &bs) {
     /**
      * Directory Entry
      * 4 bytes, offset from start of file to start of entry's data, in bytes. Offset must be a multiple of 4, so that the data starts on a 32-bit boundary.
      * 4 bytes, length of entry's data, in bytes.
      * 4 bytes, type of entry.
      */
-    // visit all entries
-    for (auto i=0; i<sec_num_dir_entries; ++i) {
+    offset = bs.getU32();
+    length = bs.getU32();
+    type   = bs.getU32();
 
-    }
+    uint32_t old_pos = bs.getPosition();
+
+    bs.setPosition(offset);
+    _sectionID = bs.getU32();
+
+    bs.setPosition(old_pos);
+}
+
+X3fImageData::X3fImageData(uint32_t offset, ByteStream &bs): X3fSection(offset, bs) {
+    type     = bs.getU32();
+    format   = bs.getU32();
+    width    = bs.getU32();
+    height   = bs.getU32();
+    dataSize = bs.getU32();
+}
+
+X3fPropertyList::X3fPropertyList(uint32_t offset, ByteStream &bs): X3fSection(offset, bs) {
+    num      = bs.getU32();
+    format   = bs.getU32();
+    reserved = bs.getU32();
+    length   = bs.getU32();
+}
+
+X3fPropertyEntry::X3fPropertyEntry(ByteStream &bs) {
+    nameOffset  = bs.getU32();
+    valueOffset = bs.getU32();
 }
 
 } // namespace rawspeed

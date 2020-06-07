@@ -41,7 +41,6 @@ public:
 
 private:
     void parseData(X3fDecoder* decoder);
-    void parseHeader();
     ByteStream bs;
 };
 

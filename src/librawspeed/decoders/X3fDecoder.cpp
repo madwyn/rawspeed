@@ -71,8 +71,4 @@ void X3fDecoder::decodeMetaDataInternal(const CameraMetaData* meta) {
     //
 }
 
-X3fDirectory::X3fDirectory(ByteStream *bytes) {
-
-}
-
 } // namespace rawspeed
