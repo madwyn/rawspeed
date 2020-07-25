@@ -4400,6 +4400,11 @@
 		<Crop x="8" y="8" width="-24" height="-8"/>
 		<Sensor black="248" white="4000"/>
 	</Camera>
+	<Camera make="OLYMPUS CORPORATION" model="E-PL10">
+		<ID make="Olympus" model="E-PL10">Olympus E-PL10</ID>
+		<Crop x="8" y="8" width="-24" height="-8"/>
+		<Sensor black="253" white="4000"/>
+	</Camera>
 	<Camera make="OLYMPUS IMAGING CORP." model="E-P5">
 		<ID make="Olympus" model="E-P5">Olympus E-P5</ID>
 		<Crop x="8" y="8" width="-24" height="-8"/>
@@ -7211,6 +7216,28 @@
 		<Crop x="0" y="0" width="-50" height="0"/>
 		<Sensor black="511" white="16380"/>
 	</Camera>
+	<Camera make="Panasonic" model="DC-S1H">
+		<ID make="Panasonic" model="DC-S1H">Panasonic DC-S1H</ID>
+		<CFA width="2" height="2">
+			<Color x="0" y="0">RED</Color>
+			<Color x="1" y="0">GREEN</Color>
+			<Color x="0" y="1">GREEN</Color>
+			<Color x="1" y="1">BLUE</Color>
+		</CFA>
+		<Crop x="0" y="0" width="-50" height="0"/>
+		<Sensor black="510" white="16380"/>
+	</Camera>
+	<Camera make="Panasonic" model="DC-S1H" mode="3:2">
+		<ID make="Panasonic" model="DC-S1H">Panasonic DC-S1H</ID>
+		<CFA width="2" height="2">
+			<Color x="0" y="0">RED</Color>
+			<Color x="1" y="0">GREEN</Color>
+			<Color x="0" y="1">GREEN</Color>
+			<Color x="1" y="1">BLUE</Color>
+		</CFA>
+		<Crop x="0" y="0" width="-50" height="0"/>
+		<Sensor black="510" white="16380"/>
+	</Camera>
 	<Camera make="Panasonic" model="DC-S1R">
 		<ID make="Panasonic" model="DC-S1R">Panasonic DC-S1R</ID>
 		<CFA width="2" height="2">
@@ -9168,6 +9195,17 @@
 		<Crop x="0" y="0" width="0" height="0"/>
 		<Sensor black="512" white="16383"/>
 	</Camera>
+	<Camera make="SONY" model="ILCE-9M2">
+		<ID make="Sony" model="ILCE-9M2">Sony ILCE-9M2</ID>
+		<CFA width="2" height="2">
+			<Color x="0" y="0">RED</Color>
+			<Color x="1" y="0">GREEN</Color>
+			<Color x="0" y="1">GREEN</Color>
+			<Color x="1" y="1">BLUE</Color>
+		</CFA>
+		<Crop x="0" y="0" width="0" height="0"/>
+		<Sensor black="512" white="16380"/>
+	</Camera>
 	<Camera make="SONY" model="DSC-RX1">
 		<ID make="Sony" model="DSC-RX1">Sony DSC-RX1</ID>
 		<CFA width="2" height="2">
@@ -9333,6 +9371,20 @@
 		</CFA>
 		<Crop x="0" y="0" width="0" height="0"/>
 		<Sensor black="0" white="0"/>
+	</Camera>
+	<Camera make="FUJIFILM" model="FinePix S1">
+		<ID make="Fujifilm" model="FinePix S1">Fujifilm FinePix S1</ID>
+		<CFA width="2" height="2">
+			<Color x="0" y="0">RED</Color>
+			<Color x="1" y="0">GREEN</Color>
+			<Color x="0" y="1">GREEN</Color>
+			<Color x="1" y="1">BLUE</Color>
+		</CFA>
+		<Crop x="0" y="0" width="0" height="0"/>
+		<Sensor black="200" white="4095"/>
+		<Hints>
+			<Hint name="jpeg32_bitorder" value=""/>
+		</Hints>
 	</Camera>
 	<Camera make="FUJIFILM" model="FinePix S6000fd">
 		<ID make="Fujifilm" model="FinePix S6000fd">Fujifilm FinePix S6000fd</ID>
@@ -10895,6 +10947,17 @@
 		<Crop x="10" y="6" width="-8" height="-10"/>
 		<Sensor black="0" white="31456"/>
 	</Camera>
+	<Camera make="Hasselblad" model="Hasselblad H4D-50">
+		<ID make="Hasselblad" model="H4D-50">Hasselblad 50-Coated</ID>
+		<CFA width="2" height="2">
+			<Color x="0" y="0">RED</Color>
+			<Color x="1" y="0">GREEN</Color>
+			<Color x="0" y="1">GREEN</Color>
+			<Color x="1" y="1">BLUE</Color>
+		</CFA>
+		<Crop x="44" y="6" width="-44" height="-86"/>
+		<Sensor black="256" white="32767"/>
+	</Camera>
 	<Camera make="Hasselblad" model="Hasselblad H5D-40">
 		<ID make="Hasselblad" model="H5D-40">Hasselblad 40-Coated5</ID>
 		<CFA width="2" height="2">
@@ -10927,6 +10990,20 @@
 		</CFA>
 		<Crop x="0" y="0" width="0" height="0"/>
 		<Sensor black="0" white="62914"/>
+	</Camera>
+	<Camera make="Hasselblad" model="Hasselblad X1DM2-50c">
+		<ID make="Hasselblad" model="X1DM2-50c">Hasselblad 50-15-Coated5</ID>
+		<CFA width="2" height="2">
+			<Color x="0" y="0">RED</Color>
+			<Color x="1" y="0">GREEN</Color>
+			<Color x="0" y="1">GREEN</Color>
+			<Color x="1" y="1">BLUE</Color>
+		</CFA>
+		<Crop x="48" y="104" width="-60" height="0"/>
+		<Sensor black="256" white="62914"/>
+		<Aliases>
+			<Alias id="X1D II 50C">Hasselblad X1D II 50C</Alias>
+		</Aliases>
 	</Camera>
 	<Camera make="RICOH IMAGING COMPANY, LTD." model="PENTAX 645Z" mode="dng">
 		<ID make="Pentax" model="645Z">PENTAX 645Z</ID>
